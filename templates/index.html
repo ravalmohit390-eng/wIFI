@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Drop</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ffffff;
+            --accent: #6c5ce7;
+            --glass: rgba(255, 255, 255, 0.15);
+            --glass-border: rgba(255, 255, 255, 0.3);
+            --text-dark: #2d3436;
+            --text-light: #dfe6e9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe, #00cec9);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: var(--text-dark);
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            height: 90vh;
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: 100vh;
+                padding: 10px;
+            }
+        }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: var(--glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Left Panel: Info & QR */
+        .info-panel {
+            flex: 1;
+            color: white;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .qr-container {
+            background: white;
+            padding: 15px;
+            border-radius: 20px;
+            margin: 20px 0;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        
+        .qr-container:hover {
+            transform: scale(1.05);
+        }
+
+        .qr-container img {
+            width: 200px;
+            height: 200px;
+            display: block;
+        }
+
+        .server-url {
+            background: rgba(0,0,0,0.2);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .server-url:hover {
+            background: rgba(0,0,0,0.4);
+        }
+
+        /* Right Panel: Chat & Files */
+        .chat-panel {
+            flex: 2;
+            position: relative;
+        }
+
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            scroll-behavior: smooth;
+        }
+
+        .message-bubble {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 12px 18px;
+            border-radius: 18px 18px 18px 4px;
+            align-self: flex-start;
+            max-width: 80%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            word-wrap: break-word;
+        }
+
+        .message-bubble.file {
+            background: #fff;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border: 1px solid rgba(108, 92, 231, 0.2);
+        }
+
+        .file-icon {
+            background: var(--accent);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .file-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: var(--text-dark);
+            font-size: 0.95rem;
+        }
+
+        .file-size {
+            font-size: 0.75rem;
+            color: #636e72;
+        }
+
+        .download-btn {
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: transform 0.2s, background 0.2s;
+        }
+        
+        .download-btn:hover {
+            transform: scale(1.1);
+            background: #5649b8;
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.8) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* Input Area */
+        .input-area {
+            background: rgba(255, 255, 255, 0.6);
+            padding: 10px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .input-area input[type="text"] {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 10px 15px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .action-btn {
+            border: none;
+            background: var(--accent);
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            transition: transform 0.2s;
+        }
+
+        .action-btn:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        /* Drag Overlay */
+        .drag-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(108, 92, 231, 0.9);
+            border-radius: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: 600;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+
+        .drag-active .drag-overlay {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: #00cec9;
+            width: 0%;
+            transition: width 0.3s;
+            z-index: 101;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0,0,0,0.2);
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Sidebar / Header -->
+    <div class="glass-card info-panel">
+        <h1>Local Drop</h1>
+        <p style="opacity: 0.8; margin-bottom: 20px;">Instant Local Sharing</p>
+        
+        <div class="qr-container">
+            <img src="data:image/png;base64,{{ qr_code }}" alt="Scan to Connect">
+        </div>
+        
+        <p>Scan to connect devices</p>
+        <div class="server-url" onclick="copyUrl()">
+            {{ server_url }}
+        </div>
+        <p style="font-size: 0.8rem; margin-top: 5px; opacity: 0.6;">(Click to Copy)</p>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="glass-card chat-panel" id="dropZone">
+        <div class="drag-overlay">Drop files to share</div>
+        <div class="progress-bar" id="progressBar"></div>
+        
+        <div class="messages-area" id="messagesArea">
+            <div style="text-align: center; opacity: 0.5; margin-top: 50px;" id="emptyState">
+                <p>No messages yet.</p>
+                <p>Type text or drag & drop files.</p>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <button class="action-btn" onclick="document.getElementById('fileInput').click()">
+                <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+            </button>
+            <input type="file" id="fileInput" hidden multiple onchange="handleFiles(this.files)">
+            
+            <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="if(event.key === 'Enter') sendMessage()">
+            
+            <button class="action-btn" style="background: #00cec9;" onclick="sendMessage()">
+                <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    const messagesArea = document.getElementById('messagesArea');
+    const emptyState = document.getElementById('emptyState');
+    const dropZone = document.getElementById('dropZone');
+    
+    // Auto-scroll function
+    function scrollToBottom() {
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+
+    // Socket Events
+    socket.on('connect', () => {
+        console.log('Connected to server');
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+    });
+
+    socket.on('new_message', (msg) => {
+        if (emptyState) emptyState.style.display = 'none';
+        appendMessage(msg);
+        scrollToBottom();
+    });
+
+    socket.on('load_history', (history) => {
+        if (history.length > 0) {
+            if (emptyState) emptyState.style.display = 'none';
+            history.forEach(appendMessage);
+            scrollToBottom();
+        }
+    });
+
+    // UI Functions
+    function appendMessage(msg) {
+        const div = document.createElement('div');
+        
+        if (msg.type === 'text') {
+            div.className = 'message-bubble';
+            div.textContent = msg.content;
+        } else if (msg.type === 'file') {
+            div.className = 'message-bubble file';
+            // Simple file extension icon logic
+            const ext = msg.filename.split('.').pop().toUpperCase();
+            
+            div.innerHTML = `
+                <div class="file-icon">${ext.substring(0, 3)}</div>
+                <div class="file-info">
+                    <span class="file-name">${msg.filename}</span>
+                    <span class="file-size">${formatBytes(msg.size)}</span>
+                </div>
+                <a href="/download/${msg.file_id}" class="download-btn" target="_blank">SAVE</a>
+            `;
+        }
+        
+        messagesArea.appendChild(div);
+    }
+
+    function sendMessage() {
+        const input = document.getElementById('messageInput');
+        const text = input.value.trim();
+        
+        if (text) {
+            socket.emit('send_message', { content: text });
+            input.value = '';
+        }
+    }
+
+    // File Upload Logic
+    function handleFiles(files) {
+        if (!files.length) return;
+        
+        Array.from(files).forEach(uploadFile);
+    }
+
+    function uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const progressBar = document.getElementById('progressBar');
+        progressBar.style.width = '10%';
+        
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            progressBar.style.width = '100%';
+            setTimeout(() => { progressBar.style.width = '0%'; }, 500);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            progressBar.style.width = '0%';
+            alert('Upload failed');
+        });
+    }
+
+    // Drag & Drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    dropZone.addEventListener('dragenter', highlight, false);
+    dropZone.addEventListener('dragover', highlight, false);
+    dropZone.addEventListener('dragleave', unhighlight, false);
+    dropZone.addEventListener('drop', handleDrop, false);
+
+    function highlight() {
+        dropZone.classList.add('drag-active');
+    }
+
+    function unhighlight() {
+        dropZone.classList.remove('drag-active');
+    }
+
+    function handleDrop(e) {
+        unhighlight();
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+    }
+
+    // Utilities
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    function copyUrl() {
+        const text = document.querySelector('.server-url').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            alert('URL copied to clipboard!');
+        });
+    }
+</script>
+</body>
+</html>
